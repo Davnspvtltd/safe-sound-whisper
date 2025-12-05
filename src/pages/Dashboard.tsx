@@ -1,19 +1,17 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useContacts } from "@/hooks/useContacts";
+import { useLocation } from "@/hooks/useLocation";
+import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import ListeningButton from "@/components/ListeningButton";
 import StatusIndicator from "@/components/StatusIndicator";
-import ContactCard from "@/components/ContactCard";
+import DraggableContactList from "@/components/DraggableContactList";
 import AddContactForm from "@/components/AddContactForm";
 import KeywordSettings from "@/components/KeywordSettings";
-import { AlertTriangle } from "lucide-react";
-
-interface Contact {
-  id: string;
-  name: string;
-  phone: string;
-}
+import LocationDisplay from "@/components/LocationDisplay";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 interface AlertStatus {
   calling: boolean;
@@ -25,62 +23,98 @@ interface AlertStatus {
 const Dashboard = () => {
   const { toast } = useToast();
   const [status, setStatus] = useState<"idle" | "listening" | "alert">("idle");
-  const [contacts, setContacts] = useState<Contact[]>([
-    { id: "1", name: "Mom", phone: "+1 (555) 123-4567" },
-    { id: "2", name: "Best Friend", phone: "+1 (555) 987-6543" },
-  ]);
   const [keywords, setKeywords] = useState(["aurora", "help", "emergency"]);
   const [detectedText, setDetectedText] = useState("");
   const [alertStatuses, setAlertStatuses] = useState<Record<string, AlertStatus>>({});
+  const [isSendingAlerts, setIsSendingAlerts] = useState(false);
 
-  const simulateAlertSequence = useCallback((contactsList: Contact[]) => {
-    // Reset all statuses
+  const { contacts, isLoading: contactsLoading, addContact, deleteContact, reorderContacts } = useContacts();
+  const { location, error: locationError, isLoading: locationLoading, refreshLocation } = useLocation();
+
+  const sendRealAlerts = useCallback(async (keyword: string, transcript: string) => {
+    if (contacts.length === 0) {
+      toast({
+        title: "No Contacts",
+        description: "Please add emergency contacts first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingAlerts(true);
+
+    // Initialize all statuses
     const initialStatuses: Record<string, AlertStatus> = {};
-    contactsList.forEach(c => {
+    contacts.forEach(c => {
       initialStatuses[c.id] = { calling: false, called: false, messaging: false, messageSent: false };
     });
     setAlertStatuses(initialStatuses);
 
-    // Primary contact (first one) - start calling
-    if (contactsList.length > 0) {
-      const primaryId = contactsList[0].id;
-      
-      // Start calling primary contact
-      setTimeout(() => {
-        setAlertStatuses(prev => ({
-          ...prev,
-          [primaryId]: { ...prev[primaryId], calling: true }
-        }));
-      }, 500);
-
-      // Call complete after 2 seconds
-      setTimeout(() => {
-        setAlertStatuses(prev => ({
-          ...prev,
-          [primaryId]: { ...prev[primaryId], calling: false, called: true }
-        }));
-      }, 2500);
-    }
-
-    // Send SMS to all contacts with staggered timing
-    contactsList.forEach((contact, index) => {
-      // Start sending SMS
-      setTimeout(() => {
-        setAlertStatuses(prev => ({
-          ...prev,
-          [contact.id]: { ...prev[contact.id], messaging: true }
-        }));
-      }, 800 + (index * 400));
-
-      // SMS sent
-      setTimeout(() => {
-        setAlertStatuses(prev => ({
-          ...prev,
-          [contact.id]: { ...prev[contact.id], messaging: false, messageSent: true }
-        }));
-      }, 1800 + (index * 400));
+    // Show messaging status for all contacts
+    const messagingStatuses: Record<string, AlertStatus> = {};
+    contacts.forEach((c, index) => {
+      messagingStatuses[c.id] = { 
+        calling: index === 0, 
+        called: false, 
+        messaging: true, 
+        messageSent: false 
+      };
     });
-  }, []);
+    setAlertStatuses(messagingStatuses);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("send-emergency-alert", {
+        body: {
+          contacts: contacts.map((c, index) => ({
+            id: c.id,
+            name: c.name,
+            phone: c.phone,
+            isPrimary: index === 0,
+          })),
+          keyword,
+          location: location ? { lat: location.lat, lng: location.lng } : undefined,
+        },
+      });
+
+      if (error) throw error;
+
+      console.log("Alert results:", data);
+
+      // Update statuses based on results
+      const finalStatuses: Record<string, AlertStatus> = {};
+      data.results?.forEach((result: any) => {
+        finalStatuses[result.contactId] = {
+          calling: false,
+          called: result.callStatus === "initiated",
+          messaging: false,
+          messageSent: result.smsStatus === "sent",
+        };
+      });
+      setAlertStatuses(finalStatuses);
+
+      toast({
+        title: "Alerts Sent!",
+        description: `Emergency alerts sent to ${contacts.length} contacts.`,
+      });
+    } catch (err: any) {
+      console.error("Error sending alerts:", err);
+      
+      // Mark all as failed
+      const failedStatuses: Record<string, AlertStatus> = {};
+      contacts.forEach(c => {
+        failedStatuses[c.id] = { calling: false, called: false, messaging: false, messageSent: false };
+      });
+      setAlertStatuses(failedStatuses);
+
+      toast({
+        title: "Alert Failed",
+        description: err.message || "Failed to send emergency alerts. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingAlerts(false);
+    }
+  }, [contacts, location, toast]);
 
   const handleKeywordDetected = useCallback((keyword: string, transcript: string) => {
     setStatus("alert");
@@ -92,21 +126,16 @@ const Dashboard = () => {
       variant: "destructive",
     });
 
-    // Start the alert sequence
-    simulateAlertSequence(contacts);
+    // Send real SMS and calls
+    sendRealAlerts(keyword, transcript);
 
-    // In a real app, this would trigger actual SMS/call alerts
-    console.log("ALERT! Sending to contacts:", contacts);
-    console.log("Detected keyword:", keyword);
-    console.log("Full transcript:", transcript);
-
-    // Reset after 8 seconds
+    // Reset after 10 seconds
     setTimeout(() => {
       setStatus("listening");
       setDetectedText("");
       setAlertStatuses({});
-    }, 8000);
-  }, [contacts, toast, simulateAlertSequence]);
+    }, 10000);
+  }, [toast, sendRealAlerts]);
 
   const {
     isListening,
@@ -138,26 +167,8 @@ const Dashboard = () => {
     }
   };
 
-  const addContact = (name: string, phone: string) => {
-    const newContact: Contact = {
-      id: Date.now().toString(),
-      name,
-      phone,
-    };
-    setContacts([...contacts, newContact]);
-    toast({
-      title: "Contact Added",
-      description: `${name} will now receive emergency alerts.`,
-    });
-  };
-
-  const deleteContact = (id: string) => {
-    const contact = contacts.find((c) => c.id === id);
-    setContacts(contacts.filter((c) => c.id !== id));
-    toast({
-      title: "Contact Removed",
-      description: `${contact?.name} has been removed from your emergency contacts.`,
-    });
+  const handleAddContact = async (name: string, phone: string) => {
+    await addContact(name, phone);
   };
 
   const updateKeywords = (newKeywords: string[]) => {
@@ -240,9 +251,21 @@ const Dashboard = () => {
                 <p className="text-destructive/80 mb-2">
                   Detected: "{detectedText}"
                 </p>
-                <p className="text-sm text-destructive/60">
-                  Contacting {contacts.length} emergency contacts...
+                <p className="text-sm text-destructive/60 flex items-center gap-2">
+                  {isSendingAlerts ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending real SMS and calls to {contacts.length} contacts...
+                    </>
+                  ) : (
+                    `Alerts sent to ${contacts.length} emergency contacts`
+                  )}
                 </p>
+                {location && (
+                  <p className="text-xs text-destructive/50 mt-2">
+                    Location shared: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                  </p>
+                )}
               </div>
             </section>
           )}
@@ -256,39 +279,56 @@ const Dashboard = () => {
           <div className="grid lg:grid-cols-2 gap-8">
             {/* Contacts Column */}
             <section className="space-y-6">
-              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                Emergency Contacts
-                {isAlerting && (
-                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-destructive text-destructive-foreground animate-pulse">
-                    ALERTING
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                  Emergency Contacts
+                  {isAlerting && (
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-destructive text-destructive-foreground animate-pulse">
+                      ALERTING
+                    </span>
+                  )}
+                </h2>
+                {!isAlerting && contacts.length > 1 && (
+                  <span className="text-xs text-muted-foreground">
+                    Drag to reorder priority
                   </span>
                 )}
-              </h2>
+              </div>
               
-              {contacts.length > 0 ? (
-                <div className="space-y-3">
-                  {contacts.map((contact, index) => (
-                    <ContactCard
-                      key={contact.id}
-                      contact={contact}
-                      onDelete={deleteContact}
-                      isPrimary={index === 0}
-                      alertStatus={isAlerting ? alertStatuses[contact.id] : undefined}
-                    />
-                  ))}
+              {contactsLoading ? (
+                <div className="p-8 text-center bg-card rounded-xl border border-border">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+                  <p className="text-muted-foreground mt-2">Loading contacts...</p>
                 </div>
+              ) : contacts.length > 0 ? (
+                <DraggableContactList
+                  contacts={contacts}
+                  onReorder={reorderContacts}
+                  onDelete={deleteContact}
+                  isAlerting={isAlerting}
+                  alertStatuses={alertStatuses}
+                />
               ) : (
                 <div className="p-8 text-center bg-card rounded-xl border border-border">
                   <p className="text-muted-foreground">No contacts added yet</p>
                 </div>
               )}
               
-              {!isAlerting && <AddContactForm onAdd={addContact} />}
+              {!isAlerting && <AddContactForm onAdd={handleAddContact} />}
             </section>
 
             {/* Settings Column */}
             <section className="space-y-6">
               <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+              
+              {/* Location Display */}
+              <LocationDisplay
+                location={location}
+                error={locationError}
+                isLoading={locationLoading}
+                onRefresh={refreshLocation}
+              />
+
               <KeywordSettings keywords={keywords} onUpdate={updateKeywords} />
               
               {/* Quick Stats */}
@@ -305,12 +345,13 @@ const Dashboard = () => {
 
               {/* Instructions */}
               <div className="p-4 bg-secondary/50 rounded-xl border border-border">
-                <h3 className="font-semibold text-foreground mb-2">How to test</h3>
+                <h3 className="font-semibold text-foreground mb-2">How it works</h3>
                 <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                  <li>Click the microphone button to start</li>
-                  <li>Allow microphone access when prompted</li>
-                  <li>Say any of your keywords: "{keywords.join('", "')}"</li>
-                  <li>Watch alerts trigger on your contacts!</li>
+                  <li>Add emergency contacts (drag to set priority)</li>
+                  <li>Allow location access for GPS sharing</li>
+                  <li>Click the microphone to start listening</li>
+                  <li>Say any keyword: "{keywords.join('", "')}"</li>
+                  <li>Real SMS and calls sent instantly!</li>
                 </ol>
               </div>
             </section>

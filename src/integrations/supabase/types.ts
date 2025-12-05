@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contacts: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          phone: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      emergency_alerts: {
+        Row: {
+          alert_type: string
+          contact_id: string | null
+          contact_name: string
+          contact_phone: string
+          created_at: string
+          error_message: string | null
+          id: string
+          keyword_detected: string | null
+          location_lat: number | null
+          location_lng: number | null
+          status: string
+        }
+        Insert: {
+          alert_type: string
+          contact_id?: string | null
+          contact_name: string
+          contact_phone: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          keyword_detected?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          status?: string
+        }
+        Update: {
+          alert_type?: string
+          contact_id?: string | null
+          contact_name?: string
+          contact_phone?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          keyword_detected?: string | null
+          location_lat?: number | null
+          location_lng?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_alerts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
