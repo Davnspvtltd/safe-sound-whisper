@@ -1,73 +1,193 @@
-# Welcome to your Lovable project
+# **AI-Based Emergency Keyword Detection System**
 
-## Project info
+### *Hands-free safety tool for real-time distress detection and automated alerts*
 
-**URL**: https://lovable.dev/projects/714033a0-214e-42aa-a352-83a7ce7748d9
+## **Overview**
 
-## How can I edit this code?
+The **AI-Based Emergency Keyword Detection System** is a safety-focused application designed to detect spoken emergency keywords—such as **“aurora”** or **“help”**—and automatically alert trusted contacts with the user’s **real-time location**.
+It serves as a **hands-free emergency trigger**, especially useful for women’s safety or situations where physically unlocking a device or pressing a button is not possible.
 
-There are several ways of editing your application.
+The system continuously listens in the background, identifies distress keywords using a trained machine-learning model, and instantly sends alerts via SMS or calls through the backend.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/714033a0-214e-42aa-a352-83a7ce7748d9) and start prompting.
+## **Key Features**
 
-Changes made via Lovable will be committed automatically to this repo.
+* 🎤 **Continuous voice monitoring** via on-device or browser-based audio streaming
+* 🤖 **Machine learning–powered keyword detection** with high accuracy
+* 🚨 **Automatic emergency alerts** sent to trusted contacts
+* 📍 **Location sharing** included in the alert
+* 🔐 **Privacy-first design** (no audio stored unless explicitly enabled)
+* 📱 **User-friendly website/app interface**
+* 👤 Manage **emergency contacts**, enable/disable listening, view alert history
+* ⚡ **Real-time response** even when the phone is locked or hands-free
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## **System Architecture**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### **1. Audio Collection & Preprocessing**
 
-Follow these steps:
+* Collect speech samples containing the emergency keywords and non-keyword background noise
+* Clean and normalize audio clips
+* Extract features such as **MFCC**, **spectrograms**, and **mel-frequency features**
+* Split into training, validation, and test sets
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### **2. Machine Learning Model**
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+* Model types supported:
 
-# Step 3: Install the necessary dependencies.
-npm i
+  * CNN-based audio classifier
+  * RNN/LSTM models for sequential audio
+  * Transformer-based audio recognition
+* Trained to distinguish emergency keywords vs. background noise
+* Exported as a lightweight model suitable for real-time inference (TensorFlow Lite / ONNX)
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### **3. Frontend + Backend Integration**
+
+* **Frontend (Web/App):**
+
+  * Start/stop continuous listening
+  * Manage emergency contacts
+  * Display detection status
+  * Trigger manual emergency alert
+
+* **Backend (Server):**
+
+  * Perform real-time inference OR receive detection results from local device
+  * Send SMS via Twilio / similar API
+  * Provide geolocation data
+  * Handle user accounts and alert logs
+
+---
+
+## **Tech Stack**
+
+* **Frontend:** React / HTML / JS / Flutter (depending on your build)
+* **Backend:** Node.js / Python Flask / Django
+* **ML Model:** TensorFlow / PyTorch
+* **Database:** Firebase / MongoDB / PostgreSQL
+* **Alert System:** Twilio API / SMS Gateway
+* **Audio Processing:** Librosa, PyDub, WebAudio API
+
+---
+
+## **How It Works**
+
+1. User enables *Listening Mode*
+2. App continuously processes small audio chunks (1–2 sec)
+3. Audio is fed into the ML keyword-detection model
+4. If keyword detected:
+
+   * Backend receives detection event
+   * Fetches user location
+   * Sends SMS/call alerts to saved contacts
+5. Contacts receive the message with **time, location, and emergency note**
+
+---
+
+## **Project Structure**
+
+```
+/model
+  ├── data/  
+  ├── training_scripts/  
+  └── exported_model/  
+
+/frontend
+  ├── components/
+  ├── pages/
+  └── services/
+
+/backend
+  ├── routes/
+  ├── controllers/
+  └── utils/
+
+README.md
+```
+
+---
+
+## **Setup Instructions**
+
+### **1. Clone the Repository**
+
+```bash
+git clone https://github.com/your-repo/emergency-keyword-detection.git
+cd emergency-keyword-detection
+```
+
+### **2. Install Dependencies**
+
+#### Backend
+
+```bash
+cd backend
+npm install   # or: pip install -r requirements.txt
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+### **3. Run ML Model (Local Inference)**
+
+```bash
+python model/run_inference.py
+```
+
+### **4. Start Development Servers**
+
+Frontend:
+
+```bash
+npm start
+```
+
+Backend:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## **Usage**
 
-**Use GitHub Codespaces**
+* Open the app/website
+* Log in and set up your list of trusted contacts
+* Enable **Listening Mode**
+* Say your emergency keyword if you are in danger
+* The system automatically sends help with your location
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## **Security & Privacy**
 
-This project is built with:
+* Audio is processed locally unless cloud inference is enabled
+* No continuous recordings stored
+* Contacts data encrypted in database
+* Only emergency events are logged
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## **Future Enhancements**
 
-Simply open [Lovable](https://lovable.dev/projects/714033a0-214e-42aa-a352-83a7ce7748d9) and click on Share -> Publish.
+* Add wake-word personalization
+* Multi-language keyword support
+* Integration with wearable devices
+* Silent mode alert triggers (vibration pattern recognition)
+* On-device inference for low battery usage
 
-## Can I connect a custom domain to my Lovable project?
+---
 
-Yes, you can!
+## **Contributing**
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Pull requests and improvements are welcome!
+Please open an issue to discuss new ideas or bug reports.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
